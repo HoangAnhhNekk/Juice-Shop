@@ -7,31 +7,10 @@ on:
   pull_request:
 
 jobs:
-  job-1:
-    # CI chỉ chạy khi có pull_request
-    name: build images 
-    if: github.event_name == 'pull_request'
+  job-1-test: # Đổi tên thành job test chính
+    name: Node.js Testing
     runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Log in to DockerHub
-        run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u ${{ secrets.DOCKERHUB_USERNAME }} --password-stdin
-
-      - name: Build Docker image
-        run: docker build -t hoangank/my-juice-shop:${{ github.sha }} .
-
-      - name: Push Docker image
-        run: docker push hoangank/my-juice-shop:${{ github.sha }}
-
-      - name: Save image tag
-        run: echo "IMAGE_TAG=${{ github.sha }}" >> $GITHUB_ENV
-
-  job-2:
-    name: test
-    runs-on: ubuntu-latest
-
+    # Vẫn chạy cho cả push và pull_request
     strategy:
       matrix:
         node-version: [20.x, 22.x, 24.x]
@@ -45,13 +24,48 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: npm run build --if-present
-      - run: npm test
+      - run: npm test # Job này phải thành công trước khi các job khác chạy
 
-  job-3:
-    name: cd
+  job-2-build: # Đổi tên thành build image và phụ thuộc vào Test
+    name: Build & Push Image
     runs-on: ubuntu-latest
-    needs: [job-1]
-    if: alway()
+    needs: [job-1-test] # CHỈ CHẠY KHI TEST THÀNH CÔNG
+    
+    # Chỉ build và push khi có push lên master (triển khai)
+    # Nếu là PR, chỉ cần test, không cần build image
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+
+    outputs:
+      image_tag: ${{ steps.set_tag.outputs.IMAGE_TAG }} # Định nghĩa output
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Log in to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      
+      - name: Define Image Tag
+        id: set_tag # Gán ID cho bước này
+        run: echo "IMAGE_TAG=${{ github.sha }}" >> $GITHUB_OUTPUT # Sửa lỗi truyền biến bằng GITHUB_OUTPUT
+
+      - name: Build Docker image
+        run: docker build -t hoangank/my-juice-shop:${{ steps.set_tag.outputs.IMAGE_TAG }} .
+
+      - name: Push Docker image
+        run: docker push hoangank/my-juice-shop:${{ steps.set_tag.outputs.IMAGE_TAG }}
+
+
+  job-3-cd:
+    name: Continuous Deployment
+    runs-on: ubuntu-latest
+    needs: [job-2-build] # CHỈ CHẠY KHI IMAGE ĐÃ ĐƯỢC BUILD VÀ PUSH THÀNH CÔNG
+    
+    # Chỉ deploy khi có push lên master (vì job-1 đã lọc, job-3 tự động lọc)
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -61,11 +75,11 @@ jobs:
           mkdir -p ~/.kube
           echo "${{ secrets.KUBECONFIG }}" > ~/.kube/config
 
-      - name: Deploy manifests
+      - name: Deploy and Update Image
+        env:
+          NEW_TAG: ${{ needs.job-1-build.outputs.image_tag }} # Lấy tag từ output của Job 1
         run: |
-          if [ -n "${{ env.IMAGE_TAG }}" ]; then
-            echo "Update deployment with new image"
-            kubectl set image deployment/juice-shop juice-shop=hoangank/my-juice-shop:${{ env.IMAGE_TAG }} --record || kubectl apply -f k8s/
-          else
-            echo "No new image, apply YAML only"
-            kubectl apply -f k8s/
+          IMAGE_NAME="hoangank/my-juice-shop:$NEW_TAG"
+           
+          # Cập nhật image tag trong deployment (cho các lần deploy sau)
+          
