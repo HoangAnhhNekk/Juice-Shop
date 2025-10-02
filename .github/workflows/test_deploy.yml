@@ -9,7 +9,7 @@ on:
 jobs:
   job-1:
     # CI chỉ chạy khi có pull_request
-    name: ci
+    name: build images 
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
@@ -50,7 +50,8 @@ jobs:
   job-3:
     name: cd
     runs-on: ubuntu-latest
-    needs: job-2
+    needs: [job-1]
+    if: alway()
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
