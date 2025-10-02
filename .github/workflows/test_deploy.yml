@@ -1,0 +1,51 @@
+name: CI/CD test_deploy
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  # CI chỉ chạy khi có pull_request
+  ci:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Log in to DockerHub
+        run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u ${{ secrets.DOCKERHUB_USERNAME }} --password-stdin
+
+      - name: Build Docker image
+        run: docker build -t hoangank/my-juice-shop:${{ github.sha }} .
+
+      - name: Push Docker image
+        run: docker push hoangank/my-juice-shop:${{ github.sha }}
+
+      - name: Save image tag
+        run: echo "IMAGE_TAG=${{ github.sha }}" >> $GITHUB_ENV
+
+  # CD luôn chạy
+  cd:
+    runs-on: ubuntu-latest
+    needs: [ci] # chờ CI nếu có
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG }}" > ~/.kube/config
+
+      - name: Deploy manifests
+        run: |
+          if [ -n "${{ env.IMAGE_TAG }}" ]; then
+            echo "Update deployment with new image"
+            kubectl set image deployment/juice-shop juice-shop=hoangank/my-juice-shop:${{ env.IMAGE_TAG }} --record || kubectl apply -f k8s/
+          else
+            echo "No new image, apply YAML only"
+            kubectl apply -f k8s/
+          fi
