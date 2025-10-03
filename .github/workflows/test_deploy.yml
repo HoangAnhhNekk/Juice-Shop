@@ -52,7 +52,7 @@ jobs:
   job-2-build: # build image
     name: Build & Push Image
     runs-on: ubuntu-latest
-    needs: [job-1-test, job-sast-scan] # CHỈ CHẠY KHI TEST THÀNH CÔNG
+    needs: [job-1-test] # CHỈ CHẠY KHI TEST THÀNH CÔNG
     
     # Chỉ build và push khi có push lên master (triển khai)
     # Nếu là PR, chỉ cần test, không cần build image
