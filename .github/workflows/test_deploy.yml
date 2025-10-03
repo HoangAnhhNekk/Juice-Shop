@@ -1,0 +1,135 @@
+name: CI/CD test_deploy
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+
+jobs:
+  job-1-test: # test 
+    name: Node.js Testing
+    runs-on: ubuntu-latest
+    # Vẫn chạy cho cả push và pull_request
+    strategy:
+      matrix:
+        node-version: [20.x, 22.x, 24.x]
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run build --if-present
+      - run: npm test # Job này phải thành công trước khi các job khác chạy
+      
+  job-sast-scan:
+    name: Security Scan (SAST with Snyk)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Snyk to check for code vulnerabilities (SAST)
+        # Sử dụng action chính thức của Snyk
+        uses: snyk/actions/node@master
+        # Bắt buộc phải có token Snyk được lưu trong GitHub Secrets
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          # Chỉ định Snyk quét mã nguồn (SAST)
+          command: code test
+          
+          # Tùy chọn: Thêm các đối số để tùy chỉnh hành vi
+          # Ví dụ: Chỉ làm thất bại (fail) job nếu tìm thấy lỗ hổng từ mức "High" trở lên.
+          # Điều này hữu ích để không bị chặn bởi các lỗi mức thấp (Low/Medium).
+          args: --severity-threshold=high
+  sonarqube-scan:
+    name: SonarQube Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          # SonarQube cần fetch toàn bộ lịch sử Git để phân tích code mới chính xác
+          fetch-depth: 0
+
+      - name: SonarQube Scan
+        # Sử dụng action chính thức của SonarSource
+        uses: sonarsource/sonarqube-scan-action@master
+        env:
+          # Cung cấp token và host URL từ GitHub Secrets
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
+      # TÙY CHỌN NHƯNG RẤT QUAN TRỌNG: Chờ kết quả Quality Gate
+      # Bước trên chỉ gửi code đi phân tích. Bước này sẽ đợi server phân tích xong
+      # và kiểm tra xem Quality Gate có "pass" hay không. Nếu không, nó sẽ làm fail job này.
+      - name: SonarQube Quality Gate check
+        uses: sonarsource/sonarqube-quality-gate-action@master
+        # Dừng workflow sau 5 phút nếu server chưa phân tích xong
+        timeout-minutes: 10
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          
+  job-2-build: # build image
+    name: Build & Push Image
+    runs-on: ubuntu-latest
+    needs: [job-1-test] # CHỈ CHẠY KHI TEST THÀNH CÔNG
+    
+    # Chỉ build và push khi có push lên master (triển khai)
+    # Nếu là PR, chỉ cần test, không cần build image
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+
+    outputs:
+      image_tag: ${{ steps.set_tag.outputs.IMAGE_TAG }} # Định nghĩa output
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Log in to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      
+      - name: Define Image Tag
+        id: set_tag # Gán ID cho bước này
+        run: echo "IMAGE_TAG=${{ github.sha }}" >> $GITHUB_OUTPUT # Sửa lỗi truyền biến bằng GITHUB_OUTPUT
+
+      - name: Build Docker image
+        run: docker build -t hoangank/my-juice-shop:${{ steps.set_tag.outputs.IMAGE_TAG }} .
+
+      - name: Push Docker image
+        run: docker push hoangank/my-juice-shop:${{ steps.set_tag.outputs.IMAGE_TAG }}
+
+
+  job-3-cd:
+    name: Continuous Deployment
+    runs-on: ubuntu-latest
+    needs: [job-2-build] # CHỈ CHẠY KHI IMAGE ĐÃ ĐƯỢC BUILD VÀ PUSH THÀNH CÔNG
+    
+    # Chỉ deploy khi có push lên master (vì job-1 đã lọc, job-3 tự động lọc)
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG }}" > ~/.kube/config
+
+      - name: Deploy and Update Image
+        env:
+          NEW_TAG: ${{ needs.job-1-build.outputs.image_tag }} # Lấy tag từ output của Job 1
+        run: |
+          IMAGE_NAME="hoangank/my-juice-shop:$NEW_TAG"
+           
+          # Cập nhật image tag trong deployment (cho các lần deploy sau)
+          
