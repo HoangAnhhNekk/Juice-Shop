@@ -48,6 +48,33 @@ jobs:
           # Ví dụ: Chỉ làm thất bại (fail) job nếu tìm thấy lỗ hổng từ mức "High" trở lên.
           # Điều này hữu ích để không bị chặn bởi các lỗi mức thấp (Low/Medium).
           args: --severity-threshold=high
+  sonarqube-scan:
+    name: SonarQube Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          # SonarQube cần fetch toàn bộ lịch sử Git để phân tích code mới chính xác
+          fetch-depth: 0
+
+      - name: SonarQube Scan
+        # Sử dụng action chính thức của SonarSource
+        uses: sonarsource/sonarqube-scan-action@master
+        env:
+          # Cung cấp token và host URL từ GitHub Secrets
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
+      # TÙY CHỌN NHƯNG RẤT QUAN TRỌNG: Chờ kết quả Quality Gate
+      # Bước trên chỉ gửi code đi phân tích. Bước này sẽ đợi server phân tích xong
+      # và kiểm tra xem Quality Gate có "pass" hay không. Nếu không, nó sẽ làm fail job này.
+      - name: SonarQube Quality Gate check
+        uses: sonarsource/sonarqube-quality-gate-action@master
+        # Dừng workflow sau 5 phút nếu server chưa phân tích xong
+        timeout-minutes: 10
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           
   job-2-build: # build image
     name: Build & Push Image
