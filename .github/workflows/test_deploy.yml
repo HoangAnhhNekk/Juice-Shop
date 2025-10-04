@@ -75,6 +75,33 @@ jobs:
         timeout-minutes: 10
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+  job-sast-scan-codeql:
+    name: Security Scan (SAST with CodeQL)
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      actions: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript
+
+      # BƯỚC BUILD CẦN THIẾT CHO DỰ ÁN TYPESCRIPT
+      # Autobuild sẽ cố gắng chạy `npm run build`
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+      
+      # Hoặc, nếu bạn muốn kiểm soát chính xác hơn, bạn có thể chạy lệnh build thủ công
+      # - name: Perform build
+      #   run: npm run build
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
           
   job-2-build: # build image
     name: Build & Push Image
