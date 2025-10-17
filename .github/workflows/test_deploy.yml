@@ -1,4 +1,4 @@
-name: CI/CD test_deploy
+name: CI/CD test_deplo
 
 on:
   push:
