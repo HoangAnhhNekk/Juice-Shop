@@ -1,44 +1,51 @@
-name: Denpendency Scan
+name: Snyk Security Scan
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "master" ] # Nhánh của Juice Shop là 'master'
   pull_request:
 
 jobs:
   snyk-scan:
     runs-on: ubuntu-latest
 
-    # Thêm các quyền cần thiết
     permissions:
-      contents: read      # Để checkout code
-      security-events: write # Để tải kết quả SARIF lên tab Security
+      contents: read
+      security-events: write
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Thiết lập môi trường, ví dụ Node.js
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '18'
+          # Quan trọng: Thêm cache để tăng tốc
+          cache: 'npm'
 
-      - name: Install dependencies
-        run: npm install
+      # ----- PHẦN SỬA LỖI BẮT ĐẦU TỪ ĐÂY -----
+      # Bước này cài đặt TẤT CẢ các dependencies cho cả frontend và backend
+      # theo đúng cách mà Juice Shop yêu cầu.
+      - name: Install all dependencies
+        run: npm install --legacy-peer-deps
 
-      # Chạy Snyk để quét và tạo báo cáo SARIF
+      # Bước này build cả frontend và backend
+      # (Lưu ý: Chúng ta không cần build để Snyk quét, nhưng làm vậy
+      # đảm bảo môi trường giống hệt như khi chạy thật)
+      - name: Build the application
+        run: npm run build
+      # ----- KẾT THÚC PHẦN SỬA LỖI -----
+
       - name: Run Snyk to check for vulnerabilities
-        uses: snyk/actions/node@master # Sử dụng action cho Node.js
-        continue-on-error: true # Để workflow tiếp tục chạy ngay cả khi tìm thấy lỗ hổng
+        uses: snyk/actions/node@master
+        continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
-          # Lệnh để chạy Snyk và xuất ra định dạng SARIF
           command: test
           args: --sarif-file-output=snyk.sarif
 
-      # Tải tệp SARIF lên GitHub Code Scanning
       - name: Upload result to GitHub Code Scanning
         uses: github/codeql-action/upload-sarif@v2
         with:
