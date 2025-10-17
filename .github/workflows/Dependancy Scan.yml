@@ -23,12 +23,12 @@ jobs:
           cache: 'npm'
 
       - name: Install Dependencies (CI method)
-        # Sử dụng npm ci để đảm bảo cài đặt sạch và đồng bộ với package-lock.json
+        # Sử dụng npm ci để đảm bảo cài đặt sạch
         run: npm ci --legacy-peer-deps
 
       - name: Run Snyk to check for vulnerabilities
         uses: snyk/actions/node@master
-        continue-on-error: true # Bật lại sau khi đã sửa lỗi
+        # continue-on-error: false # Đảm bảo chúng ta thấy lỗi gốc từ Snyk
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
@@ -37,6 +37,7 @@ jobs:
 
       - name: Upload result to GitHub Code Scanning
         uses: github/codeql-action/upload-sarif@v3
-        if: always() # Đảm bảo bước này luôn chạy để tải lên sarif ngay cả khi snyk thất bại
+        # Chỉ chạy bước này nếu bước trước thành công
+        if: success()
         with:
           sarif_file: snyk.sarif
