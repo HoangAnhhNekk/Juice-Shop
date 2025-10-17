@@ -1,8 +1,8 @@
-name: Snyk Security Scan
+name: Snyk Security Scan (Debug)
 
 on:
   push:
-    branches: [ "master" ] # Nhánh của Juice Shop là 'master'
+    branches: [ "master" ]
   pull_request:
 
 jobs:
@@ -21,21 +21,25 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: '20.x'
-          # Quan trọng: Thêm cache để tăng tốc
           cache: 'npm'
 
-      # ----- PHẦN SỬA LỖI BẮT ĐẦU TỪ ĐÂY -----
-      # Bước này cài đặt TẤT CẢ các dependencies cho cả frontend và backend
-      # theo đúng cách mà Juice Shop yêu cầu.
       - name: Install all dependencies
         run: npm install --legacy-peer-deps
 
-      # Bước này build cả frontend và backend
-      # (Lưu ý: Chúng ta không cần build để Snyk quét, nhưng làm vậy
-      # đảm bảo môi trường giống hệt như khi chạy thật)
+      - name: DEBUG - Show current directory and list files
+        run: |
+          echo "--- Current Directory ---"
+          pwd
+          echo "--- Files in Directory ---"
+          ls -la
+          echo "--- Checking for package.json ---"
+          cat package.json | grep "build" || echo "Build script not found in package.json"
+
+      - name: DEBUG - List available npm scripts
+        run: npm run
+
       - name: Build the application
         run: npm run build
-      # ----- KẾT THÚC PHẦN SỬA LỖI -----
 
       - name: Run Snyk to check for vulnerabilities
         uses: snyk/actions/node@master
