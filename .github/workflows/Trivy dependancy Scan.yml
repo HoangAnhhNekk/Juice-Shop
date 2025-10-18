@@ -21,7 +21,7 @@ jobs:
 
       # Chạy Trivy để quét các phần phụ thuộc
       - name: Run Trivy vulnerability scanner on filesystem
-        uses: aquasecurity/trivy-action@v0.24.0 # Nên sử dụng phiên bản cụ thể
+        uses: aquasecurity/trivy-action@v0.33.0 # Nên sử dụng phiên bản cụ thể
         with:
           # Loại quét: quét hệ thống tệp để tìm các tệp lock
           scan-type: 'fs'
