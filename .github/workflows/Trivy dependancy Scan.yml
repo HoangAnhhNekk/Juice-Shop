@@ -25,17 +25,13 @@ jobs:
         with:
           # Loại quét: quét hệ thống tệp để tìm các tệp lock
           scan-type: 'fs'
-          
+          format: 'table'
           # Chỉ báo lỗi cho các lỗ hổng từ mức HIGH trở lên
           severity: 'HIGH,CRITICAL'
-          
           # Không làm workflow thất bại để có thể tải báo cáo lên
-          # Bạn có thể đổi thành '1' nếu muốn pipeline bị chặn
           exit-code: '0'
-
-          # Định dạng đầu ra: 'sarif' để tích hợp với GitHub
-          format: 'table'
-          
+          trivy-flags: '--skip-version-check'
+        
       - name: Generate SARIF report for GitHub Security tab
         run: |
           # Lệnh trivy fs [đường dẫn] --format sarif --output [tên tệp]
