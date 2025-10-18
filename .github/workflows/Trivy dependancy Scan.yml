@@ -31,7 +31,7 @@ jobs:
           
           # Không làm workflow thất bại để có thể tải báo cáo lên
           # Bạn có thể đổi thành '1' nếu muốn pipeline bị chặn
-          exit-code: '0'
+          #exit-code: '0'
 
           # Định dạng đầu ra: 'sarif' để tích hợp với GitHub
           format: 'sarif'
