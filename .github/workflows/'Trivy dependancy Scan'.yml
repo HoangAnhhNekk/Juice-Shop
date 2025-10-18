@@ -1,0 +1,48 @@
+name: Trivy Dependency Scan
+
+on:
+  push:
+    branches: [ "master" ] # Thay 'master' bằng 'main' nếu cần
+  pull_request:
+
+jobs:
+  trivy-scan:
+    name: Trivy Scan
+    runs-on: ubuntu-latest
+
+    # Thêm các quyền cần thiết
+    permissions:
+      contents: read      # Để checkout code
+      security-events: write # Để tải kết quả SARIF lên tab Security
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Chạy Trivy để quét các phần phụ thuộc
+      - name: Run Trivy vulnerability scanner on filesystem
+        uses: aquasecurity/trivy-action@0.13.2 # Nên sử dụng phiên bản cụ thể
+        with:
+          # Loại quét: quét hệ thống tệp để tìm các tệp lock
+          scan-type: 'fs'
+          
+          # Chỉ báo lỗi cho các lỗ hổng từ mức HIGH trở lên
+          severity: 'HIGH,CRITICAL'
+          
+          # Không làm workflow thất bại để có thể tải báo cáo lên
+          # Bạn có thể đổi thành '1' nếu muốn pipeline bị chặn
+          exit-code: '0'
+
+          # Định dạng đầu ra: 'sarif' để tích hợp với GitHub
+          format: 'sarif'
+          
+          # Tên tệp output
+          output: 'trivy-results.sarif'
+
+      # Tải tệp SARIF lên GitHub Code Scanning
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        # if: always() đảm bảo bước này luôn chạy, ngay cả khi bước trivy có exit-code khác 0
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
