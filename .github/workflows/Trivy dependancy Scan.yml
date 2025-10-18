@@ -31,13 +31,17 @@ jobs:
           
           # Không làm workflow thất bại để có thể tải báo cáo lên
           # Bạn có thể đổi thành '1' nếu muốn pipeline bị chặn
-          #exit-code: '0'
+          exit-code: '0'
 
           # Định dạng đầu ra: 'sarif' để tích hợp với GitHub
-          format: 'sarif'
+          format: 'table'
           
-          # Tên tệp output
-          output: 'trivy-results.sarif'
+      - name: Generate SARIF report for GitHub Security tab
+        run: |
+          # Lệnh trivy fs [đường dẫn] --format sarif --output [tên tệp]
+          trivy fs . --format sarif --output trivy-results.sarif --severity HIGH,CRITICAL
+        # Bật continue-on-error ở đây để nếu lệnh này có lỗi, bước upload vẫn chạy
+        continue-on-error: true
 
       # Tải tệp SARIF lên GitHub Code Scanning
       - name: Upload Trivy scan results to GitHub Security tab
