@@ -90,18 +90,13 @@ jobs:
           scan-type: 'sbom'
           # Đường dẫn đến tệp sbom đã tải về
           input: 'sbom.cdx.json'
-          format: 'table'
+          format: 'sarif'
           output: 'trivy-results.sarif'
           severity: 'HIGH,CRITICAL'
           exit-code: '0'
           #trivy-flags: '--skip-version-check'
 
-      - name: Genarate SARIF report for Github Security tab
-        run: |
-          # Lệnh trivy fs [đường dẫn] --format sarif --output [tên tệp]
-          trivy fs . --format sarif --output trivy-results.sarif --severity HIGH,CRITICAL
-
-        continue-on-error: true
+     
 
       - name: Upload Trivy scan results
         uses: github/codeql-action/upload-sarif@v3
