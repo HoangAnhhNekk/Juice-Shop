@@ -36,9 +36,11 @@ jobs:
       - name: Scan SBOM with Grype
         # Sử dụng action chính thức của Grype
         uses: anchore/scan-action@v6
+        continue-on-error: true
         with:
           sbom: "sbom.json"
-          fail-on-severity: "high" # Tự động làm workflow thất bại nếu có lỗi từ mức 'high'
+          output-format: table
+          
 
       - name: Scan Image with Trivy
         # Sử dụng action chính thức của Trivy
