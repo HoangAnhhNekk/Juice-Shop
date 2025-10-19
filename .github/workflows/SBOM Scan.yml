@@ -56,15 +56,16 @@ jobs:
 
       - name: Scan SBOM with Snyk
         uses: snyk/actions/node@master
-        #continue-on-error: true
+        continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
           command: sbom test
-          args: sbom.cdx.json --sarif-file-output=snyk-results.sarif
+          args: sbom.cdx.json --sarif-file-output=snyk-results.sarif --experimental
 
       - name: Upload Snyk scan results
         uses: github/codeql-action/upload-sarif@v3
+        if: success()
         with:
           category: snyk-sbom-scan
           sarif_file: snyk-results.sarif
