@@ -35,7 +35,7 @@ jobs:
 
       - name: Scan SBOM with Grype
         # Sử dụng action chính thức của Grype
-        uses: anchore/grype-action@v3
+        uses: anchore/scan-action@v6
         with:
           sbom: "sbom.json"
           fail-on-severity: "high" # Tự động làm workflow thất bại nếu có lỗi từ mức 'high'
