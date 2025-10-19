@@ -31,30 +31,7 @@ jobs:
           name: sbom-artifact
           path: sbom.cdx.json
 
-  # ------ JOB 2: QUÉT SBOM BẰNG SNYK ------
-  scan-sbom-with-snyk:
-    name: Scan SBOM with Snyk
-    runs-on: ubuntu-latest
-    needs: generate-sbom 
-    permissions:
-      security-events: write
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: sbom-artifact
-      - name: Scan SBOM with Snyk
-        uses: snyk/actions/node@master
-        continue-on-error: true # <-- Giữ lại để không fail vì lỗ hổng
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        with:
-          command: sbom test
-          args: --file=sbom.cdx.json --sarif-file-output=snyk-results.sarif --experimental
-      - uses: github/codeql-action/upload-sarif@v3
-        if: always() # <-- Đảm bảo luôn chạy
-        with:
-          category: snyk-sbom-scan
-          sarif_file: snyk-results.sarif
+
 
   # ------ JOB 3: QUÉT SBOM BẰNG TRIVY ------
   scan-sbom-with-trivy:
@@ -62,6 +39,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: generate-sbom
     permissions:
+      contents: read
+      actions: read
       security-events: write
     steps:
       - uses: actions/download-artifact@v4
