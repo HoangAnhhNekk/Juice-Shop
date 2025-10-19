@@ -1,0 +1,110 @@
+name: Parallel SBOM Scanning
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+
+jobs:
+  # ------ JOB 1: TẠO SBOM ------
+  generate-sbom:
+    name: Generate SBOM
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read # Chỉ cần quyền đọc code
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Generate CycloneDX SBOM with Trivy
+        uses: aquasecurity/trivy-action@0.33.0
+        with:
+          scan-type: 'fs'
+          format: 'cyclonedx'
+          output: 'sbom.cdx.json'
+          exit-code: '0'
+
+      - name: Upload SBOM as an artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-artifact
+          path: sbom.cdx.json
+
+  # ------ JOB 2: QUÉT SBOM BẰNG SNYK ------
+  scan-sbom-with-snyk:
+    name: Scan SBOM with Snyk
+    runs-on: ubuntu-latest
+    needs: generate-sbom 
+    permissions:
+      security-events: write
+
+    steps:
+      - name: Download SBOM artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: sbom-artifact
+
+      - name: Scan SBOM with Snyk
+        uses: snyk/actions/node@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          command: sbom test
+          args: sbom.cdx.json --sarif-file-output=snyk-results.sarif
+
+      - name: Upload Snyk scan results
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          category: snyk-sbom-scan
+          sarif_file: snyk-results.sarif
+
+  # ------ JOB 3: QUÉT SBOM BẰNG TRIVY ------
+  scan-sbom-with-trivy:
+    name: Scan SBOM with Trivy
+    runs-on: ubuntu-latest
+    needs: generate-sbom # <-- Cũng chờ Job 1 hoàn thành
+    permissions:
+      security-events: write # Cần quyền để tải kết quả lên
+
+    steps:
+      - name: Download SBOM artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: sbom-artifact
+      
+      - name: Scan SBOM with Trivy
+        uses: aquasecurity/trivy-action@0.33.0
+        with:
+          # Chỉ định loại quét là sbom
+          scan-type: 'sbom'
+          # Đường dẫn đến tệp sbom đã tải về
+          input: 'sbom.cdx.json'
+          format: 'table'
+          output: 'trivy-results.sarif'
+          severity: 'HIGH,CRITICAL'
+          exit-code: '0'
+          #trivy-flags: '--skip-version-check'
+
+      - name: Genarate SARIF report for Github Security tab
+        run: |
+          # Lệnh trivy fs [đường dẫn] --format sarif --output [tên tệp]
+          trivy fs . --format sarif --output trivy-results.sarif --severity HIGH,CRITICAL
+
+        continue-on-error: true
+
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          category: trivy-sbom-scan
+          sarif_file: 'trivy-results.sarif'
