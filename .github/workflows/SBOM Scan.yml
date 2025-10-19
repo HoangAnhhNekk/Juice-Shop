@@ -1,4 +1,4 @@
-name: Parallel SBOM Scanning
+name: SBOM and Image Security Scan
 
 on:
   push:
@@ -6,55 +6,46 @@ on:
   pull_request:
 
 jobs:
-  # ------ JOB 1: TẠO SBOM ------
-  generate-sbom:
-    name: Generate SBOM
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
+  build-and-scan:
+    # QUAN TRỌNG: Vì bạn đang chạy Docker và cài đặt công cụ, self-hosted runner là lựa chọn đúng.
+    runs-on: self-hosted
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v3
-        with:
-          node-version: '20.x'
-          cache: 'npm'
-      - run: npm ci --legacy-peer-deps
-      - name: Generate CycloneDX SBOM with Trivy
-        uses: aquasecurity/trivy-action@v0 # <-- SỬA: Dùng thẻ major
-        with:
-          scan-type: 'fs'
-          format: 'cyclonedx'
-          output: 'sbom.cdx.json'
-          exit-code: '0'
-      - uses: actions/upload-artifact@v4
-        with:
-          name: sbom-artifact
-          path: sbom.cdx.json
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-
-
-  # ------ JOB 3: QUÉT SBOM BẰNG TRIVY ------
-  scan-sbom-with-trivy:
-    name: Scan SBOM with Trivy
-    runs-on: ubuntu-latest
-    needs: generate-sbom
-    permissions:
-      contents: read
-      actions: read
-      security-events: write
-    steps:
-      - uses: actions/download-artifact@v4
+      - name: Generate SBOM with Syft
+        # Sử dụng action chính thức để tránh phải cài đặt thủ công và quản lý phiên bản
+        uses: anchore/syft-action@v0
         with:
-          name: sbom-artifact
-      - name: Install Trivy
-        uses: aquasecurity/trivy-action@v0 # <-- SỬA: Dùng thẻ major
-        with:
-          install-only: true
-      - name: Scan SBOM with Trivy command
+          format: spdx-json
+          output-file: "sbom.json"
+
+      - name: Build Container Image
         run: |
-          trivy sbom sbom.cdx.json --format sarif --output trivy-results.sarif --severity "HIGH,CRITICAL" --exit-code 0
-      - uses: github/codeql-action/upload-sarif@v3
-        if: always() # <-- Đảm bảo luôn chạy
+          docker build -t myapp:${{ github.sha }} .
+        # Sử dụng github.sha thay cho 'latest' để đảm bảo mỗi commit có một tag image duy nhất.
+        # Đây là thực hành tốt nhất, tránh xung đột và dễ dàng truy vết.
+      
+      - name: Upload SBOM Artifact 
+        uses: actions/upload-artifact@v4
         with:
-          category: trivy-sbom-scan
-          sarif_file: 'trivy-results.sarif'
+          name: sbom
+          path: sbom.json
+
+      - name: Scan SBOM with Grype
+        # Sử dụng action chính thức của Grype
+        uses: anchore/grype-action@v3
+        with:
+          sbom: "sbom.json"
+          fail-on-severity: "high" # Tự động làm workflow thất bại nếu có lỗi từ mức 'high'
+
+      - name: Scan Image with Trivy
+        # Sử dụng action chính thức của Trivy
+        uses: aquasecurity/trivy-action@0.33.0
+        with:
+          image-ref: 'myapp:${{ github.sha }}'
+          format: 'table' # In ra bảng đẹp trong log
+          exit-code: '0' # Làm workflow thất bại nếu có lỗi
+          trivy-flags: '--skip-version-check'
+          severity: 'HIGH,CRITICAL'
