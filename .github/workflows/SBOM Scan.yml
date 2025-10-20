@@ -48,7 +48,7 @@ jobs:
       - name: Upload SBOM Artifact 
         uses: actions/upload-artifact@v4
         with:
-          name: sbom
+          name: sbom-${{ github.sha }}
           path: sbom.json
 
   scan-sbom-grype:
@@ -83,12 +83,11 @@ jobs:
       packages: read
 
     steps:
-      - name: Log in Github Container Registry 
+      - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
         # Sử dụng action chính thức của Trivy
       - name: Scan vulnerability scanner on image 
