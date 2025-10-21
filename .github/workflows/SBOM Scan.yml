@@ -53,7 +53,7 @@ jobs:
         uses: snyk/actions/node@master
         continue-on-error: true
         env: 
-          SYNK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with: 
           command: test
           args: --sarif-file-output=snyk.sarif
